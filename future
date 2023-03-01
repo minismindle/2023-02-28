@@ -1,0 +1,83 @@
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <Windows.h>
+#include <future>
+
+int64 Calculate()
+{
+	int64 sum = 0;
+
+	for (int32 i = 0; i < 100000; i++)
+	{
+		sum += i;
+	}
+	return sum;
+}
+
+void PromiseWorker(promise<string>&& promise)
+{
+	promise.set_value("Secret Message");
+}
+void TaskWorker(packaged_task<int64(void)>&& task)
+{
+	task();
+}
+int main()
+{
+	// 동기 실행
+	// int64 sum = Calculate();
+	// cout << sum << endl;
+
+	// std :: future
+	{
+		// 1) deferred -> 지연해서 실행하세요
+		// 2) async -> 별도의 스레드를 만들어 실행하세요
+		// 3( deferred | async -> 둘 중 알아서 골라주세요
+		std::future<int64> future = std::async(std::launch::async, Calculate);
+
+		// TODO
+		future.wait_for(1ms);
+		int64 sum = future.get(); // 결과물이 이제서야 필요하다!
+	}
+
+	// std :: promise
+	{
+		// 미래에 결과물을 반환해줄꺼라 약속해줘~
+		promise<string> promise;
+		future<string> future = promise.get_future();
+
+		thread t (PromiseWorker, move(promise));
+
+		string message = future.get();
+		cout << message << endl;
+
+		t.join();
+	}
+	// std :: packaged_task
+	{
+		packaged_task<int64(void)> task(Calculate);
+		future<int64> future = task.get_future();
+
+		thread t (TaskWorker, move(task));
+		 
+		int64 sum = future.get();
+		cout << sum << endl;
+
+		t.join();
+	}
+	// 결론)
+	// mutex,condition_variable까지 않고 단순한 얘들을 처리할 수 있는
+
+	// 1) async
+	// 원하는 함수를 비동기적으로 실행
+	// 2) promise
+	// 결과물을 promise를 통해 future로 받아줌
+	// 3) packaged_task
+	// 원하는 함수의 실행 결과를 packaged_task를 통해 future로 받아줌
+	return 0;
+}
+
